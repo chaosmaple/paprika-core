@@ -1,0 +1,16 @@
+datasource db {
+    provider = "postgresql"
+    url      = "postgres://test:test@localhost:5432/paprika_db"
+}
+ 
+generator client {
+    // Corresponds to the cargo alias created earlier
+    provider      = "cargo prisma"
+    // The location to generate the client. Is relative to the position of the schema
+    output        = "../src/prisma.rs"
+}
+ 
+model User {
+    id          String  @id
+    displayName String
+}
