@@ -1,5 +1,5 @@
 {
     "rust-analyzer.linkedProjects": [
-        "./db/Cargo.toml"
+        "./prisma-cli/Cargo.toml"
     ]
 }
