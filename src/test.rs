@@ -1,30 +1,14 @@
-use actix_web::{get, post, web, Result};
-use serde::Deserialize;
+use actix_web::{get, web, HttpResponse, Responder};
+
+use crate::db::PrismaClient;
 
 pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(test_path)
-        .service(test_query)
-        .service(test_json);
+    cfg.service(get_users);
 }
 
-#[derive(Deserialize)]
-struct TestObject {
-    id: u32,
-    name: String,
-}
+#[get("/users")]
+async fn get_users(client: web::Data<PrismaClient>) -> impl Responder {
+    let users = client.user().find_many(vec![]).exec().await.unwrap();
 
-#[get("/path/{id}/{name}")]
-async fn test_path(path: web::Path<(u32, String)>) -> Result<String> {
-    let (id, name) = path.into_inner();
-    Ok(format!("id: {}, name: {}", id, name))
-}
-
-#[get("/test_query")]
-async fn test_query(query: web::Query<TestObject>) -> Result<String> {
-    Ok(format!("id: {}, name: {}", query.id, query.name))
-}
-
-#[post("/test_json")]
-async fn test_json(query: web::Json<TestObject>) -> Result<String> {
-    Ok(format!("id: {}, name: {}", query.id, query.name))
+    HttpResponse::Ok().json(users)
 }

@@ -1,24 +1,25 @@
 pub mod test;
 
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+
+#[allow(warnings, unused)]
+pub mod db;
+use db::PrismaClient;
 
 #[get("/")]
 async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+    let client = web::Data::new(PrismaClient::_builder().build().await.unwrap());
+
+    HttpServer::new(move || {
         App::new()
+            .app_data(client.clone())
             .service(web::scope("/test").configure(test::config))
             .service(hello)
-            .service(echo)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
