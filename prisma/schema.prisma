@@ -2,15 +2,95 @@ datasource db {
     provider = "postgresql"
     url      = env("DATABASE_URL")
 }
- 
+
 generator client {
     // Corresponds to the cargo alias created earlier
-    provider      = "cargo prisma"
+    provider = "cargo prisma"
     // The location to generate the client. Is relative to the position of the schema
-    output        = "../src/db.rs"
+    output   = "../src/db.rs"
 }
- 
-model User {
-    id          String  @id
-    displayName String
+
+enum WSCardType {
+    Character
+    Climax
+    Event
+}
+
+enum WSCardSide {
+    W
+    S
+}
+
+enum WSCardColor {
+    Red
+    Blue
+    Green
+    Yellow
+    Purple
+    Colorless
+}
+
+enum WSCardTrigger {
+    None
+    Soul
+    DoubleSoul
+    Pool
+    Comeback
+    Return
+    Draw
+    Treasure
+    Shot
+    Gate
+    Choice
+    Standby
+}
+
+model WSCard {
+    id    Int @id @default(autoincrement())
+    image String
+    card_name String
+    card_no String
+    product WSProduct @relation(fields: [product_id], references: [id])
+    product_id Int
+    expansion WSExpansion @relation(fields: [expansion_id], references: [expansion_id])
+    expansion_id String
+    rarity String
+    side WSCardSide
+    card_type WSCardType
+    color WSCardColor
+    level Int
+    cost Int
+    power Int
+    soul Int
+    trigger WSCardTrigger
+    traits WSTraitsOnCards[]
+    text String @default("-")
+    flavor String? @default("-")
+    illustrator String? @default("-")
+}
+
+model WSProduct {
+    id    Int @id @default(autoincrement())
+    product String
+    card_list WSCard[]
+}
+
+model WSExpansion {
+    expansion_id String @id
+    expansion_name String
+    card_list WSCard[]
+}
+
+model WSTrait {
+    id    Int @id @default(autoincrement())
+    trait_name String
+    card_list WSTraitsOnCards[]
+}
+
+model WSTraitsOnCards {
+    trait_id Int
+    card_id Int
+    trait WSTrait @relation(fields: [trait_id], references: [id])
+    card WSCard @relation(fields: [card_id], references: [id])
+    @@id([trait_id, card_id])
 }
