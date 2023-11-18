@@ -1,10 +1,6 @@
 pub mod test;
-
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
-
-#[allow(warnings, unused)]
-pub mod db;
-use db::PrismaClient;
+use ws_db::db::PrismaClient;
 
 #[get("/")]
 async fn hello() -> impl Responder {

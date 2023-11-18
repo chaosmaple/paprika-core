@@ -1,15 +1,10 @@
 [package]
-name = "paprika-core"
+name = "ws-db"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[workspace]
-members = [".", "prisma-cli", "ws-scraper", "ws-db"]
 
 [dependencies]
 prisma-client-rust = { git = "https://github.com/Brendonovich/prisma-client-rust", tag = "0.6.9" }
-
-actix-web = "4.4.0"
 serde = { version = "1.0.190", features = ["derive"] }
-ws-db = { path = "./ws-db" }
