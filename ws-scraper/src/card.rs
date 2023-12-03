@@ -1,22 +1,18 @@
-use headless_chrome::Browser;
+use self::{scrap_processor::process_detail_section, types::WSCard};
+use scraper::{Html, Selector};
 use std::error::Error;
 
-use self::scrap_processor::process_detail_section;
-
+mod db_helper;
 mod scrap_processor;
 mod types;
 
-pub fn scrap_card_details(browser: &Browser, url: &str) -> Result<(), Box<dyn Error>> {
-    let tab = browser.new_tab()?;
-    let card_details = tab
-        .navigate_to(url)?
-        .wait_for_element("div#cardDetail.card-detail table.card-detail-table")?;
+pub async fn get_card_details(url: &str) -> Result<WSCard, Box<dyn Error>> {
+    let response = reqwest::get(url).await?.text().await?;
+    let document = Html::parse_document(&response);
+    let selector = Selector::parse("div#cardDetail.card-detail table.card-detail-table").unwrap();
+    let card_details = document.select(&selector).next().unwrap();
 
-    println!("processing card details, {:?}", tab.get_url());
     let card_data = process_detail_section(&card_details)?;
-
-    println!("card data: {:?}", card_data);
-
-    tab.close(true)?;
-    Ok(())
+    print!("{:?}", card_data);
+    Ok(card_data)
 }

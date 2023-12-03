@@ -1,14 +1,18 @@
-use headless_chrome::Element;
+use scraper::{ElementRef, Selector};
 use std::error::Error;
+use ws_db::db::{WsCardColor, WsCardSide, WsCardTrigger, WsCardType};
 
 use super::types::*;
 
-pub(crate) fn process_detail_section(detail_section: &Element) -> Result<WSCard, Box<dyn Error>> {
-    let card_details = detail_section.find_elements("tr")?;
+pub(crate) fn process_detail_section(
+    detail_section: &ElementRef,
+) -> Result<WSCard, Box<dyn Error>> {
+    let tr_selector = Selector::parse("tr").unwrap();
+    let card_details = detail_section.select(&tr_selector);
     let mut card = WSCard::default();
 
     for tr in card_details {
-        if let Some(class) = tr.get_attribute_value("class")? {
+        if let Some(class) = tr.attr("class") {
             if class == "first" {
                 process_picture_n_names(&tr, &mut card)?;
             } else {
@@ -21,42 +25,52 @@ pub(crate) fn process_detail_section(detail_section: &Element) -> Result<WSCard,
     Ok(card)
 }
 
-fn process_picture_n_names(tr: &Element, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
-    let tds = tr.find_elements("td")?;
-    let image = tds[0].find_element("img")?.get_attribute_value("src")?;
-    let card_name = tds[1].get_inner_text()?;
-    let mut card_names = card_name.split("\n");
-    card.image = image.unwrap().to_string();
-    card.card_name = card_names.next().unwrap().to_string();
-    card.card_name_kana = card_names.next().unwrap().to_string();
+fn process_picture_n_names(tr: &ElementRef, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
+    let td_slct = Selector::parse("td").unwrap();
+    let img_slct = Selector::parse("img").unwrap();
+    let mut tds = tr.select(&td_slct);
+    card.image = tds
+        .next()
+        .and_then(|td| td.select(&img_slct).next())
+        .and_then(|img| img.attr("src"))
+        .map(str::to_owned)
+        .unwrap();
+    let card_names = tds.next().unwrap().inner_html();
+    let mut cns = card_names.split("<br>");
+    card.card_name = cns.next().unwrap().trim().to_owned();
+    card.card_name_kana = cns.next().unwrap().trim().to_owned();
+
     Ok(())
 }
 
-fn process_row(elem: &Element, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
-    let tds = elem.find_elements("th,td")?;
-    for pair in tds.chunks(2) {
-        let column_name = pair[0].get_inner_text()?;
-        let inner_text = pair[1].get_inner_text()?;
-        println!("processing {}: {}", column_name, inner_text);
+fn process_row(elem: &ElementRef, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
+    let th_selector = Selector::parse("th").unwrap();
+    let td_selector = Selector::parse("td").unwrap();
+    let ths = elem.select(&th_selector);
+    let tds = elem.select(&td_selector);
+    for pair in ths.zip(tds) {
+        let column_name = pair.0.inner_html();
+        let inner_text = pair.1.inner_html();
+        // println!("processing {}: {}", column_name, inner_text);
         match column_name.as_str() {
             "カード番号" => card.card_no = parse_text(&inner_text),
             "商品名" => card.product = parse_text(&inner_text),
             "ネオスタンダード区分" => card.expansion = parse_text(&inner_text),
             "作品番号" => card.expansion_id = parse_text(&inner_text),
             "レアリティ" => card.rarity = parse_text(&inner_text),
-            "サイド" => card.side = parse_side(&pair[1])?,
+            "サイド" => card.side = parse_side(&pair.1)?,
             "種類" => card.card_type = parse_card_type(&inner_text)?,
-            "色" => card.color = parse_color(&pair[1])?,
+            "色" => card.color = parse_color(&pair.1)?,
             "レベル" => card.level = parse_number(&inner_text)?,
             "コスト" => card.cost = parse_number(&inner_text)?,
             "パワー" => card.power = parse_number(&inner_text)?,
-            "ソウル" => card.soul = parse_soul(&pair[1])? as u16,
-            "トリガー" => card.trigger = parse_trigger(&pair[1])?,
+            "ソウル" => card.soul = parse_soul(&pair.1)? as i32,
+            "トリガー" => card.trigger = parse_trigger(&pair.1)?,
             "特徴" => card.traits = parse_traits(&inner_text),
             "テキスト" => card.text = parse_text(&inner_text),
             "フレーバー" => card.flavor_text = parse_text(&inner_text),
             "イラストレーター" => card.illustrator = parse_text(&inner_text),
-            _ => unreachable!("unrecognized key: {:?}", pair[0].get_inner_text()),
+            _ => unreachable!("unrecognized key: {:?}", &column_name),
         }
     }
     Ok(())
@@ -66,7 +80,7 @@ fn parse_text(text: &str) -> String {
     text.trim().replace("\u{3000}", " ")
 }
 
-fn parse_number(text: &str) -> Result<u16, Box<dyn Error>> {
+fn parse_number(text: &str) -> Result<i32, Box<dyn Error>> {
     if text.chars().all(|c| c.is_digit(10)) {
         Ok(text.parse()?)
     } else {
@@ -74,81 +88,89 @@ fn parse_number(text: &str) -> Result<u16, Box<dyn Error>> {
     }
 }
 
-fn parse_side(elem: &Element) -> Result<WSCardSide, Box<dyn Error>> {
-    let image = elem.find_element("img")?;
-    let side = match image.get_attribute_value("src")? {
-        Some(str) => match str.split("/").last().unwrap() {
-            "w.gif" => WSCardSide::Weiß,
-            "s.gif" => WSCardSide::Schwarz,
+fn parse_side(elem: &ElementRef) -> Result<WsCardSide, Box<dyn Error>> {
+    let image_src = elem
+        .select(&Selector::parse("img").unwrap())
+        .next()
+        .and_then(|img| img.attr("src"))
+        .and_then(|src| src.split("/").last());
+    let side = match image_src {
+        Some(str) => match str {
+            "w.gif" => WsCardSide::W,
+            "s.gif" => WsCardSide::S,
             _ => unreachable!("Unknown side"),
         },
-        None => return Err("No src attribute found for image".into()),
+        None => unreachable!("None side attr"),
     };
     Ok(side)
 }
 
-fn parse_card_type(text: &str) -> Result<WSCardType, Box<dyn Error>> {
+fn parse_card_type(text: &str) -> Result<WsCardType, Box<dyn Error>> {
     let card_type = match parse_text(text).as_str() {
-        "キャラ" => WSCardType::Character,
-        "イベント" => WSCardType::Event,
-        "クライマックス" => WSCardType::Climax,
+        "キャラ" => WsCardType::Character,
+        "イベント" => WsCardType::Event,
+        "クライマックス" => WsCardType::Climax,
         _ => unreachable!("Unknown card type"),
     };
     Ok(card_type)
 }
 
-fn parse_color(elem: &Element) -> Result<WSCardColor, Box<dyn Error>> {
-    let image = elem.find_element("img")?;
-    let side = match image.get_attribute_value("src")? {
+fn parse_color(elem: &ElementRef) -> Result<WsCardColor, Box<dyn Error>> {
+    let image = elem
+        .select(&Selector::parse("img").unwrap())
+        .next()
+        .and_then(|img| img.attr("src"));
+    let side = match image {
         Some(str) => match str.split("/").last().unwrap() {
-            "red.gif" => WSCardColor::Red,
-            "yellow.gif" => WSCardColor::Yellow,
-            "blue.gif" => WSCardColor::Blue,
-            "green.gif" => WSCardColor::Green,
-            "purple.gif" => WSCardColor::Purple,
+            "red.gif" => WsCardColor::Red,
+            "yellow.gif" => WsCardColor::Yellow,
+            "blue.gif" => WsCardColor::Blue,
+            "green.gif" => WsCardColor::Green,
+            "purple.gif" => WsCardColor::Purple,
             _ => unreachable!("Unknown color"),
         },
-        None => return Err("No src attribute found for image".into()),
+        None => unreachable!("None color attr"),
     };
     Ok(side)
 }
 
-fn parse_soul(elem: &Element) -> Result<usize, Box<dyn Error>> {
-    let souls = elem.find_elements("image")?;
-    Ok(souls.len())
+fn parse_soul(elem: &ElementRef) -> Result<usize, Box<dyn Error>> {
+    let length = elem.select(&Selector::parse("img").unwrap()).count();
+    Ok(length)
 }
 
-fn parse_trigger(elem: &Element) -> Result<WSCardTrigger, Box<dyn Error>> {
-    let triggers = elem.find_elements("img")?;
-    if triggers.is_empty() {
-        return Ok(WSCardTrigger::None);
+fn parse_trigger(elem: &ElementRef) -> Result<WsCardTrigger, Box<dyn Error>> {
+    let selector = &Selector::parse("img").unwrap();
+    let triggers = elem.select(selector);
+    let tri_len = triggers.clone().count();
+    if tri_len == 0 {
+        return Ok(WsCardTrigger::None);
     };
     let trigger = match triggers
         .last()
-        .unwrap()
-        .get_attribute_value("src")?
-        .unwrap()
-        .split("/")
-        .last()
-        .unwrap()
+        .and_then(|img| img.attr("src"))
+        .and_then(|src| src.split("/").last())
     {
-        "soul.gif" => {
-            if triggers.len() == 2 {
-                WSCardTrigger::DoubleSoul
-            } else {
-                WSCardTrigger::Soul
+        Some(str) => match str {
+            "soul.gif" => {
+                if tri_len == 2 {
+                    WsCardTrigger::DoubleSoul
+                } else {
+                    WsCardTrigger::Soul
+                }
             }
-        }
-        "stock.gif" => WSCardTrigger::Pool,
-        "salvage.gif" => WSCardTrigger::Comeback,
-        "bounce.gif" => WSCardTrigger::Return,
-        "draw.gif" => WSCardTrigger::Draw,
-        "treasure.gif" => WSCardTrigger::Treasure,
-        "shot.gif" => WSCardTrigger::Shot,
-        "gate.gif" => WSCardTrigger::Gate,
-        "standby.gif" => WSCardTrigger::Standby,
-        "choice.gif" => WSCardTrigger::Choice,
-        _ => WSCardTrigger::None,
+            "stock.gif" => WsCardTrigger::Pool,
+            "salvage.gif" => WsCardTrigger::Comeback,
+            "bounce.gif" => WsCardTrigger::Return,
+            "draw.gif" => WsCardTrigger::Draw,
+            "treasure.gif" => WsCardTrigger::Treasure,
+            "shot.gif" => WsCardTrigger::Shot,
+            "gate.gif" => WsCardTrigger::Gate,
+            "standby.gif" => WsCardTrigger::Standby,
+            "choice.gif" => WsCardTrigger::Choice,
+            _ => WsCardTrigger::None,
+        },
+        None => unreachable!("None trigger attr"),
     };
     Ok(trigger)
 }

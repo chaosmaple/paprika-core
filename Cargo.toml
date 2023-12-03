@@ -13,3 +13,5 @@ prisma-client-rust = { git = "https://github.com/Brendonovich/prisma-client-rust
 actix-web = "4.4.0"
 serde = { version = "1.0.190", features = ["derive"] }
 ws-db = { path = "./ws-db" }
+ws-scraper = { path = "./ws-scraper" }
+headless_chrome = "1.0.8"

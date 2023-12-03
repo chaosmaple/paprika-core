@@ -47,43 +47,43 @@ enum WSCardTrigger {
 
 model WSCard {
     id    Int @id @default(autoincrement())
-    image String
-    card_name String
-    card_no String
+    image String @db.VarChar(50)
+    card_name String @db.VarChar(30)
+    card_no String @db.VarChar(20)
     product WSProduct @relation(fields: [product_id], references: [id])
     product_id Int
     expansion WSExpansion @relation(fields: [expansion_id], references: [expansion_id])
     expansion_id String
-    rarity String
+    rarity String @db.VarChar(10)
     side WSCardSide
     card_type WSCardType
     color WSCardColor
-    level Int
-    cost Int
+    level Int @db.SmallInt
+    cost Int @db.SmallInt
     power Int
-    soul Int
+    soul Int @db.SmallInt
     trigger WSCardTrigger
     traits WSTraitsOnCards[]
-    text String @default("-")
-    flavor String? @default("-")
-    illustrator String? @default("-")
+    text String @default("-") @db.VarChar(200)
+    flavor String? @default("-") @db.VarChar(100)
+    illustrator String? @default("-") @db.VarChar(20)
 }
 
 model WSProduct {
     id    Int @id @default(autoincrement())
-    product String
+    product String @unique
     card_list WSCard[]
 }
 
 model WSExpansion {
     expansion_id String @id
-    expansion_name String
+    expansion_name String @db.VarChar(50)
     card_list WSCard[]
 }
 
 model WSTrait {
     id    Int @id @default(autoincrement())
-    trait_name String
+    trait_name String @db.VarChar(20)
     card_list WSTraitsOnCards[]
 }
 
